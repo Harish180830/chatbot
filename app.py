@@ -53,19 +53,161 @@ from langchain_core.output_parsers import StrOutputParser
 # PAGE CONFIG
 # ---------------------------------------------------------------------
 st.set_page_config(page_title="Multi-Modal RAG Chatbot", page_icon="🤖", layout="wide")
-st.title("🤖 Multi-Modal RAG Chatbot")
-st.caption("Chat with PDFs, Word docs, text files, images, and videos — powered by Groq + LangChain")
+
+# Light blue / white / black theme.
+# Base colors come from .streamlit/config.toml (Streamlit's native theming -
+# this is more stable across Streamlit versions than raw CSS overrides).
+# This CSS block only styles the few custom elements (login card, chat
+# bubbles, buttons) that the native theme doesn't reach.
+THEME_CSS = """
+<style>
+    .stApp { background-color: #FFFFFF; }
+
+    /* Login card */
+    .login-card {
+        max-width: 400px;
+        margin: 4rem auto 0 auto;
+        padding: 2.5rem 2rem;
+        background-color: #FFFFFF;
+        border: 1px solid #CFE8FA;
+        border-radius: 14px;
+        box-shadow: 0 4px 24px rgba(46, 134, 193, 0.12);
+    }
+    .login-title {
+        text-align: center;
+        color: #111111;
+        font-weight: 700;
+        font-size: 1.6rem;
+        margin-bottom: 0.25rem;
+    }
+    .login-subtitle {
+        text-align: center;
+        color: #4A4A4A;
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        background-color: #2E86C1;
+        color: #FFFFFF;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    .stButton > button:hover {
+        background-color: #21618C;
+        color: #FFFFFF;
+    }
+
+    /* Chat bubbles */
+    [data-testid="stChatMessage"] {
+        background-color: #EAF4FB;
+        border-radius: 12px;
+        border: 1px solid #CFE8FA;
+    }
+
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #EAF4FB;
+        border-right: 1px solid #CFE8FA;
+    }
+
+    h1, h2, h3 { color: #111111; }
+</style>
+"""
+st.markdown(THEME_CSS, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------
 # SESSION STATE (keeps data alive between reruns / chat turns)
 # ---------------------------------------------------------------------
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
+if "users" not in st.session_state:
+    # Demo-only in-memory user store. Resets whenever the app restarts -
+    # this is NOT persistent storage, just enough for a working login flow.
+    st.session_state.users = {}
 if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "qa_chain" not in st.session_state:
     st.session_state.qa_chain = None
+
+
+# ---------------------------------------------------------------------
+# LOGIN / SIGN UP PAGE
+# ---------------------------------------------------------------------
+def show_login_page():
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">🤖 RAG Chatbot</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="login-subtitle">Sign in to chat with your documents, images, and videos</div>',
+        unsafe_allow_html=True,
+    )
+
+    tab_login, tab_signup = st.tabs(["Login", "Sign Up"])
+
+    with tab_login:
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Log In", use_container_width=True)
+
+        if submitted:
+            users = st.session_state.users
+            if username in users and users[username] == password:
+                st.session_state.authenticated = True
+                st.session_state.username = username
+                st.rerun()
+            else:
+                st.error("Invalid username or password.")
+
+    with tab_signup:
+        with st.form("signup_form"):
+            new_username = st.text_input("Choose a username")
+            new_password = st.text_input("Choose a password", type="password")
+            confirm_password = st.text_input("Confirm password", type="password")
+            signup_submitted = st.form_submit_button("Create Account", use_container_width=True)
+
+        if signup_submitted:
+            if not new_username or not new_password:
+                st.error("Username and password can't be empty.")
+            elif new_password != confirm_password:
+                st.error("Passwords don't match.")
+            elif new_username in st.session_state.users:
+                st.error("That username is already taken.")
+            else:
+                st.session_state.users[new_username] = new_password
+                st.success("Account created! Go to the Login tab to sign in.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.caption(
+        "⚠️ Demo login only — accounts are stored in memory and reset when the app restarts. "
+        "Don't reuse a real password here."
+    )
+
+
+if not st.session_state.authenticated:
+    show_login_page()
+    st.stop()
+
+
+# ---------------------------------------------------------------------
+# MAIN APP HEADER
+# ---------------------------------------------------------------------
+header_col1, header_col2 = st.columns([5, 1])
+with header_col1:
+    st.title("🤖 Multi-Modal RAG Chatbot")
+    st.caption(f"Signed in as **{st.session_state.username}** — chat with PDFs, DOCX, TXT, images, and videos")
+with header_col2:
+    if st.button("Log Out", use_container_width=True):
+        st.session_state.authenticated = False
+        st.session_state.username = ""
+        st.rerun()
 
 
 # ---------------------------------------------------------------------
@@ -209,8 +351,15 @@ def build_vectorstore(uploaded_files, groq_api_key):
 
 RAG_PROMPT = ChatPromptTemplate.from_template(
     "You are a helpful assistant answering questions about the user's uploaded "
-    "files. Use only the context below to answer. If the answer isn't in the "
-    "context, say you don't know.\n\n"
+    "files (documents, OCR'd images, and video transcripts). Use only the "
+    "context below to answer. If the answer isn't in the context, say you "
+    "don't know — do not make anything up.\n\n"
+    "Format your answer in structured Markdown:\n"
+    "- Start with a one-sentence direct answer\n"
+    "- Follow with a '**Key Points**' section as bullet points, if there is "
+    "more than one relevant fact\n"
+    "- Keep it concise; use short bullets, not long paragraphs\n"
+    "- Only include a bullet if it's actually supported by the context\n\n"
     "Context:\n{context}\n\n"
     "Question: {question}"
 )
