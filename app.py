@@ -54,40 +54,114 @@ from langchain_core.output_parsers import StrOutputParser
 # ---------------------------------------------------------------------
 st.set_page_config(page_title="Multi-Modal RAG Chatbot", page_icon="🤖", layout="wide")
 
-# Light blue / white / black theme.
-# Base colors come from .streamlit/config.toml (Streamlit's native theming -
-# this is more stable across Streamlit versions than raw CSS overrides).
-# This CSS block only styles the few custom elements (login card, chat
-# bubbles, buttons) that the native theme doesn't reach.
-THEME_CSS = """
+# ---------------------------------------------------------------------
+# THEME: two CSS blocks.
+# - LOGIN_CSS: dark glass card (black/blue/white), used only on the login page.
+# - APP_CSS: light blue/white/black theme, used after the user signs in.
+# Base app colors also come from .streamlit/config.toml (Streamlit's native
+# theming - more stable across Streamlit versions than CSS overrides alone).
+# ---------------------------------------------------------------------
+LOGIN_CSS = """
 <style>
-    .stApp { background-color: #FFFFFF; }
+    .stApp {
+        background: radial-gradient(circle at top, #16222A 0%, #0D1117 100%);
+    }
 
-    /* Login card */
+    /* Center the login card both horizontally and vertically */
+    [data-testid="stAppViewContainer"] .main .block-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 88vh;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
     .login-card {
-        max-width: 400px;
-        margin: 4rem auto 0 auto;
-        padding: 2.5rem 2rem;
-        background-color: #FFFFFF;
-        border: 1px solid #CFE8FA;
-        border-radius: 14px;
-        box-shadow: 0 4px 24px rgba(46, 134, 193, 0.12);
+        width: 420px;
+        max-width: 90vw;
+        padding: 2.75rem 2.5rem;
+        background: linear-gradient(155deg, rgba(30, 41, 59, 0.85), rgba(13, 17, 23, 0.9));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 22px;
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(14px);
     }
     .login-title {
         text-align: center;
-        color: #111111;
+        color: #FFFFFF;
         font-weight: 700;
-        font-size: 1.6rem;
+        font-size: 1.7rem;
         margin-bottom: 0.25rem;
     }
     .login-subtitle {
         text-align: center;
-        color: #4A4A4A;
-        font-size: 0.9rem;
-        margin-bottom: 1.5rem;
+        color: #9FB3C8;
+        font-size: 0.88rem;
+        margin-bottom: 1.75rem;
     }
 
-    /* Buttons */
+    /* Tabs */
+    .login-card [data-baseweb="tab-list"] {
+        background: transparent;
+        gap: 0.5rem;
+    }
+    .login-card [data-baseweb="tab"] {
+        color: #9FB3C8;
+        font-weight: 600;
+    }
+    .login-card [aria-selected="true"] {
+        color: #FFFFFF !important;
+        border-bottom-color: #2E86C1 !important;
+    }
+
+    /* Field labels */
+    .login-card [data-testid="stWidgetLabel"] p {
+        color: #E5EAF0;
+        font-weight: 600;
+        font-size: 0.92rem;
+    }
+
+    /* Input boxes - dark, rounded, matches reference */
+    .login-card input {
+        background-color: #141A24 !important;
+        color: #FFFFFF !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 10px !important;
+        padding: 0.7rem 1rem !important;
+    }
+    .login-card input::placeholder {
+        color: #5C6B7A !important;
+    }
+
+    /* Login / Create Account button - black-to-blue gradient, pill shaped */
+    .login-card .stButton > button,
+    .login-card .stFormSubmitButton > button {
+        width: 100%;
+        background: linear-gradient(90deg, #0D1B2A 0%, #1B4965 55%, #2E86C1 100%);
+        color: #FFFFFF;
+        border: none;
+        border-radius: 50px;
+        padding: 0.75rem 0;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        margin-top: 0.5rem;
+    }
+    .login-card .stButton > button:hover,
+    .login-card .stFormSubmitButton > button:hover {
+        background: linear-gradient(90deg, #000000 0%, #163A5F 55%, #2E86C1 100%);
+        color: #FFFFFF;
+    }
+
+    .login-caption { text-align: center; color: #5C6B7A; }
+</style>
+"""
+
+APP_CSS = """
+<style>
+    .stApp { background-color: #FFFFFF; }
+
     .stButton > button {
         background-color: #2E86C1;
         color: #FFFFFF;
@@ -100,14 +174,12 @@ THEME_CSS = """
         color: #FFFFFF;
     }
 
-    /* Chat bubbles */
     [data-testid="stChatMessage"] {
         background-color: #EAF4FB;
         border-radius: 12px;
         border: 1px solid #CFE8FA;
     }
 
-    /* Sidebar */
     [data-testid="stSidebar"] {
         background-color: #EAF4FB;
         border-right: 1px solid #CFE8FA;
@@ -116,7 +188,6 @@ THEME_CSS = """
     h1, h2, h3 { color: #111111; }
 </style>
 """
-st.markdown(THEME_CSS, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------
@@ -142,6 +213,7 @@ if "qa_chain" not in st.session_state:
 # LOGIN / SIGN UP PAGE
 # ---------------------------------------------------------------------
 def show_login_page():
+    st.markdown(LOGIN_CSS, unsafe_allow_html=True)
     st.markdown('<div class="login-card">', unsafe_allow_html=True)
     st.markdown('<div class="login-title">🤖 RAG Chatbot</div>', unsafe_allow_html=True)
     st.markdown(
@@ -153,9 +225,9 @@ def show_login_page():
 
     with tab_login:
         with st.form("login_form"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            submitted = st.form_submit_button("Log In", use_container_width=True)
+            username = st.text_input("Username", placeholder="Enter username")
+            password = st.text_input("Password", type="password", placeholder="Enter password")
+            submitted = st.form_submit_button("🔒 Login", use_container_width=True)
 
         if submitted:
             users = st.session_state.users
@@ -168,9 +240,9 @@ def show_login_page():
 
     with tab_signup:
         with st.form("signup_form"):
-            new_username = st.text_input("Choose a username")
-            new_password = st.text_input("Choose a password", type="password")
-            confirm_password = st.text_input("Confirm password", type="password")
+            new_username = st.text_input("Choose a username", placeholder="Enter username")
+            new_password = st.text_input("Choose a password", type="password", placeholder="Enter password")
+            confirm_password = st.text_input("Confirm password", type="password", placeholder="Re-enter password")
             signup_submitted = st.form_submit_button("Create Account", use_container_width=True)
 
         if signup_submitted:
@@ -185,15 +257,18 @@ def show_login_page():
                 st.success("Account created! Go to the Login tab to sign in.")
 
     st.markdown('</div>', unsafe_allow_html=True)
-    st.caption(
-        "⚠️ Demo login only — accounts are stored in memory and reset when the app restarts. "
-        "Don't reuse a real password here."
+    st.markdown(
+        '<p class="login-caption">⚠️ Demo login only — accounts are stored in memory and reset '
+        'when the app restarts. Don\'t reuse a real password here.</p>',
+        unsafe_allow_html=True,
     )
 
 
 if not st.session_state.authenticated:
     show_login_page()
     st.stop()
+
+st.markdown(APP_CSS, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------
