@@ -9,4 +9,4 @@ pypdf
 docx2txt
 pytesseract
 Pillow
-moviepy
+moviepy>=2.0

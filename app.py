@@ -22,7 +22,12 @@ import streamlit as st
 from groq import Groq
 from PIL import Image
 import pytesseract
-from moviepy import VideoFileClip
+
+# moviepy changed its import path between v1 and v2 - this works with either
+try:
+    from moviepy import VideoFileClip
+except ImportError:
+    from moviepy.editor import VideoFileClip
 
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import HuggingFaceEmbeddings
