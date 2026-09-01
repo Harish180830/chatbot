@@ -45,7 +45,8 @@ except ImportError:
     from langchain.docstore.document import Document
 
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
-from langchain.chains import RetrievalQA
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 
 # ---------------------------------------------------------------------
@@ -206,6 +207,19 @@ def build_vectorstore(uploaded_files, groq_api_key):
     return vectorstore
 
 
+RAG_PROMPT = ChatPromptTemplate.from_template(
+    "You are a helpful assistant answering questions about the user's uploaded "
+    "files. Use only the context below to answer. If the answer isn't in the "
+    "context, say you don't know.\n\n"
+    "Context:\n{context}\n\n"
+    "Question: {question}"
+)
+
+
+def format_docs(docs):
+    return "\n\n".join(d.page_content for d in docs)
+
+
 def build_qa_chain(vectorstore, groq_api_key):
     # Groq deprecated the llama-3.3-70b-versatile / llama-3.1-8b-instant chat
     # models. openai/gpt-oss-120b is their current recommended general-purpose
@@ -216,13 +230,13 @@ def build_qa_chain(vectorstore, groq_api_key):
         temperature=0.2,
     )
     retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
-    chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=True,
-    )
-    return chain
+
+    # LCEL chain: retrieved context + question -> prompt -> llm -> plain text.
+    # Built this way instead of the older RetrievalQA helper, which pulls in
+    # a legacy pydantic-heavy base class that breaks on newer Python versions.
+    answer_chain = RAG_PROMPT | llm | StrOutputParser()
+
+    return {"retriever": retriever, "answer_chain": answer_chain}
 
 
 # ---------------------------------------------------------------------
@@ -270,11 +284,15 @@ if user_question:
 
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
-                result = st.session_state.qa_chain.invoke({"query": user_question})
-                answer = result["result"]
+                retriever = st.session_state.qa_chain["retriever"]
+                answer_chain = st.session_state.qa_chain["answer_chain"]
+
+                docs = retriever.invoke(user_question)
+                context = format_docs(docs)
+                answer = answer_chain.invoke({"context": context, "question": user_question})
+
                 sources = sorted({
-                    doc.metadata.get("source", "unknown")
-                    for doc in result.get("source_documents", [])
+                    doc.metadata.get("source", "unknown") for doc in docs
                 })
                 st.markdown(answer)
                 if sources:
