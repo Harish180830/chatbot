@@ -1,0 +1,12 @@
+streamlit
+groq
+langchain
+langchain-groq
+langchain-community
+faiss-cpu
+sentence-transformers
+pypdf
+docx2txt
+pytesseract
+Pillow
+moviepy
