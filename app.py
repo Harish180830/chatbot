@@ -160,32 +160,104 @@ LOGIN_CSS = """
 
 APP_CSS = """
 <style>
-    .stApp { background-color: #FFFFFF; }
-
-    .stButton > button {
-        background-color: #2E86C1;
-        color: #FFFFFF;
-        border: none;
-        border-radius: 8px;
-        font-weight: 600;
-    }
-    .stButton > button:hover {
-        background-color: #21618C;
-        color: #FFFFFF;
+    .stApp {
+        background: radial-gradient(circle at top, #16222A 0%, #0D1117 100%);
     }
 
-    [data-testid="stChatMessage"] {
-        background-color: #EAF4FB;
-        border-radius: 12px;
-        border: 1px solid #CFE8FA;
+    /* Headings - bright and clearly visible */
+    h1, h2, h3 {
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+    }
+    p, span, label, .stMarkdown, .stCaption {
+        color: #E5EAF0 !important;
     }
 
+    /* Sidebar - dark glass panel matching the login card */
     [data-testid="stSidebar"] {
-        background-color: #EAF4FB;
-        border-right: 1px solid #CFE8FA;
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.9), rgba(13, 17, 23, 0.95));
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    [data-testid="stSidebar"] * {
+        color: #E5EAF0 !important;
+    }
+    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+        color: #FFFFFF !important;
     }
 
-    h1, h2, h3 { color: #111111; }
+    /* Text / password inputs - dark, matches login page inputs */
+    input, textarea {
+        background-color: #141A24 !important;
+        color: #FFFFFF !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 10px !important;
+    }
+    input::placeholder { color: #7C8CA0 !important; }
+
+    /* File uploader dropzone */
+    [data-testid="stFileUploaderDropzone"] {
+        background-color: #141A24 !important;
+        border: 1px dashed rgba(255, 255, 255, 0.15) !important;
+        border-radius: 12px !important;
+    }
+
+    /* Buttons - black-to-blue gradient, matches login button */
+    .stButton > button,
+    .stFormSubmitButton > button,
+    [data-testid="stFileUploaderDropzone"] button {
+        background: linear-gradient(90deg, #0D1B2A 0%, #1B4965 55%, #2E86C1 100%) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 10px !important;
+        font-weight: 700 !important;
+    }
+    .stButton > button:hover,
+    .stFormSubmitButton > button:hover {
+        background: linear-gradient(90deg, #000000 0%, #163A5F 55%, #2E86C1 100%) !important;
+        color: #FFFFFF !important;
+    }
+
+    /* Chat bubbles - dark cards with a blue accent border */
+    [data-testid="stChatMessage"] {
+        background-color: #141A24 !important;
+        border-radius: 14px;
+        border: 1px solid rgba(46, 134, 193, 0.35);
+        color: #FFFFFF !important;
+    }
+    [data-testid="stChatMessage"] * { color: #FFFFFF !important; }
+
+    /* Chat input box */
+    [data-testid="stChatInput"] {
+        background-color: #141A24 !important;
+        border-radius: 50px !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    }
+    [data-testid="stChatInput"] textarea {
+        background-color: transparent !important;
+        color: #FFFFFF !important;
+    }
+
+    /* Inline code / tags (e.g. "int data", "Node *next") - bright green on dark, high contrast */
+    code {
+        background-color: #0B2B1E !important;
+        color: #4ADE80 !important;
+        border-radius: 5px;
+        padding: 0.15rem 0.4rem;
+    }
+
+    /* Success / error banners - readable on dark background */
+    [data-testid="stAlert"] {
+        background-color: #141A24 !important;
+        border-radius: 10px;
+    }
+    [data-testid="stAlert"] p { color: #FFFFFF !important; }
+
+    /* Expander (Sources) */
+    [data-testid="stExpander"] {
+        background-color: #141A24 !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 10px !important;
+    }
 </style>
 """
 
