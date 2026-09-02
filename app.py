@@ -498,15 +498,23 @@ def build_vectorstore(uploaded_files, groq_api_key):
 
 RAG_PROMPT = ChatPromptTemplate.from_template(
     "You are a helpful assistant answering questions about the user's uploaded "
-    "files (documents, OCR'd images, and video transcripts). Use only the "
-    "context below to answer. If the answer isn't in the context, say you "
-    "don't know — do not make anything up.\n\n"
-    "Format your answer in structured Markdown:\n"
+    "files (documents, OCR'd images, and video transcripts).\n\n"
+    "You have two modes. Pick exactly one:\n"
+    "- [DOCUMENT] mode: use this if the context below actually contains "
+    "information relevant to the question. Answer using ONLY that context — "
+    "do not add outside facts in this mode.\n"
+    "- [GENERAL] mode: use this if the context does NOT contain relevant "
+    "information. In this mode, ignore the context and answer the question "
+    "yourself using your own general knowledge, as a normal helpful AI "
+    "assistant would.\n\n"
+    "Your response MUST start with exactly one tag on its own first line — "
+    "either [DOCUMENT] or [GENERAL] — followed by a blank line, then the "
+    "answer.\n\n"
+    "Format the answer itself in structured Markdown:\n"
     "- Start with a one-sentence direct answer\n"
     "- Follow with a '**Key Points**' section as bullet points, if there is "
     "more than one relevant fact\n"
-    "- Keep it concise; use short bullets, not long paragraphs\n"
-    "- Only include a bullet if it's actually supported by the context\n\n"
+    "- Keep it concise; use short bullets, not long paragraphs\n\n"
     "Context:\n{context}\n\n"
     "Question: {question}"
 )
@@ -514,6 +522,17 @@ RAG_PROMPT = ChatPromptTemplate.from_template(
 
 def format_docs(docs):
     return "\n\n".join(d.page_content for d in docs)
+
+
+def parse_answer(raw_answer):
+    """Split off the [DOCUMENT] / [GENERAL] mode tag the LLM was asked to prefix."""
+    text = raw_answer.strip()
+    if text.upper().startswith("[GENERAL]"):
+        return "general", text[len("[GENERAL]"):].strip()
+    if text.upper().startswith("[DOCUMENT]"):
+        return "document", text[len("[DOCUMENT]"):].strip()
+    # Model didn't follow the format - fall back to treating it as a document answer
+    return "document", text
 
 
 def build_qa_chain(vectorstore, groq_api_key):
@@ -562,8 +581,13 @@ st.divider()
 
 for msg in st.session_state.chat_history:
     with st.chat_message(msg["role"]):
+        if msg["role"] == "assistant" and msg.get("mode"):
+            if msg["mode"] == "general":
+                st.caption("🌐 General AI knowledge — not from your uploaded files")
+            else:
+                st.caption("📄 Answered from your uploaded files")
         st.markdown(msg["content"])
-        if msg["role"] == "assistant" and msg.get("sources"):
+        if msg["role"] == "assistant" and msg.get("mode") == "document" and msg.get("sources"):
             with st.expander("📚 Sources"):
                 for s in msg["sources"]:
                     st.write(f"- {s}")
@@ -585,17 +609,24 @@ if user_question:
 
                 docs = retriever.invoke(user_question)
                 context = format_docs(docs)
-                answer = answer_chain.invoke({"context": context, "question": user_question})
+                raw_answer = answer_chain.invoke({"context": context, "question": user_question})
+                mode, answer = parse_answer(raw_answer)
 
                 sources = sorted({
                     doc.metadata.get("source", "unknown") for doc in docs
                 })
+
+                if mode == "general":
+                    st.caption("🌐 General AI knowledge — not from your uploaded files")
+                else:
+                    st.caption("📄 Answered from your uploaded files")
+
                 st.markdown(answer)
-                if sources:
+                if mode == "document" and sources:
                     with st.expander("📚 Sources"):
                         for s in sources:
                             st.write(f"- {s}")
 
         st.session_state.chat_history.append(
-            {"role": "assistant", "content": answer, "sources": sources}
+            {"role": "assistant", "content": answer, "sources": sources, "mode": mode}
         )
